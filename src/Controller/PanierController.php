@@ -2,12 +2,16 @@
 
 namespace App\Controller;
 
+use App\Entity\Detail;
 use App\Repository\ProduitRepository;
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
-use Symfony\Component\HttpFoundation\Response;
+use Doctrine\ORM\EntityManagerInterface;
+use App\Entity\Produit, App\Entity\Commande;
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\HttpFoundation\Session\SessionInterface as Session;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
+use Sensio\Bundle\FrameworkExtraBundle\Configuration\IsGranted;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\Session\SessionInterface as Session;
 
 /**
  * @Route("/panier")
@@ -62,4 +66,69 @@ class PanierController extends AbstractController
         //dd($produit); // dd : Dump and Die
         return $this->redirectToRoute("app_home");
     }
+
+    /**
+     * @Route("/vider", name="app_panier_vider")
+     */
+    public function vider(Session $session)
+    {
+        $session->remove("panier");
+        return $this->redirectToRoute("app_panier");
+    }
+
+    /**
+     * @Route("/supprimer-produit-{id}", name="app_panier_supprimer", requirements={"id"="\d+"})
+     */
+    public function supprimer(Produit $produit, Session $session)
+    {
+        $panier = $session->get("panier", []);
+        foreach ($panier as $indice => $ligne) {
+            if( $ligne['produit']->getId() == $produit->getId() ){
+                unset($panier[$indice]);
+                break;
+            }
+        }
+        $session->set("panier", $panier);
+        return $this->redirectToRoute("app_panier");
+    }
+
+    /**
+     * @Route("/valider", name="app_panier_valider")
+     * @IsGranted("ROLE_CLIENT")
+     */
+    public function valider(Session $session, ProduitRepository $produitRepository, EntityManagerInterface $em)
+    {
+        $panier = $session->get("panier", []);
+        if( $panier ){
+            $cmd = new Commande;
+            $cmd->setDateEnregistrement(new \DateTime());
+            $cmd->setEtat("en attente");
+            $cmd->setClient($this->getUser());  // affecte l'utilisateur connecté à la propriété 'client' de l'objet $cmd
+            $montant = 0;
+            foreach($panier as $ligne){
+                /* On récupère le produit en bdd plutôt que d'utiliser l'objet produit enregistré en session, sinon
+                    il y a un bug (lié à la sérialisation en session) qui ajoute un doublon dans la table produit */
+                $produit = $produitRepository->find( $ligne["produit"]->getId() );
+                $montant += $produit->getPrix() * $ligne["quantite"];
+
+                $detail = new Detail;
+                $detail->setPrix( $produit->getPrix() );
+                $detail->setQuantite($ligne["quantite"]);
+                $detail->setProduit( $produit );
+                $detail->setCommande( $cmd );
+                $em->persist($detail); // 'persist' est l'équivalent d'une requête préparée INSERT INTO. La requête est mise
+                                        // en attente. 
+                $produit->setStock( $produit->getStock() - $ligne["quantite"] );
+            }
+            $cmd->setMontant($montant);
+            $em->persist($cmd);
+            $em->flush(); // Toutes les requêtes en attente sont exécutées
+            $session->remove("panier");
+            $this->addFlash("success", "Votre commande a été enregistrée");
+            return $this->redirectToRoute("app_panier");
+        }
+        $this->addFlash("danger", "Le panier est vide. Vous ne pouvez pas valider la commande.");
+        return $this->redirectToRoute("app_panier");
+    }
+
 }

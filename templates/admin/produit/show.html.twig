@@ -2,8 +2,9 @@
 
 {% block title %}Produit{% endblock %}
 
+{% block h1 %}Fiche produit{% endblock %}
+
 {% block body %}
-    <h1>Produit</h1>
 
     <table class="table">
         <tbody>
@@ -12,11 +13,11 @@
                 <td>{{ produit.id }}</td>
             </tr>
             <tr>
-                <th>Reference</th>
+                <th>Référence</th>
                 <td>{{ produit.reference }}</td>
             </tr>
             <tr>
-                <th>Categorie</th>
+                <th>Catégorie</th>
                 <td>{{ produit.categorie }}</td>
             </tr>
             <tr>
@@ -29,15 +30,30 @@
             </tr>
             <tr>
                 <th>Photo</th>
-                <td>{{ produit.photo }}</td>
+                <td>
+                    <img src="{{ image_path ~ produit.photo }}" alt="">
+                    
+                </td>
             </tr>
             <tr>
                 <th>Prix</th>
-                <td>{{ produit.prix }}</td>
+                <td>{{ produit.prix }} €</td>
             </tr>
             <tr>
                 <th>Stock</th>
                 <td>{{ produit.stock }}</td>
+            </tr>
+
+            <tr>
+                <th>Popularité</th>
+                <td>
+                    <p>Le produit a été commandé {{ produit.details|length  }} fois</p>
+                    {# {% set nb = 0 %}
+                    {% for d in produit.details %}
+                        {% set nb = nb + d.quantite %}
+                    {% endfor %} #}
+                    <p>Le nombre de produits commandés : {{ nb }}</p>
+                </td>
             </tr>
         </tbody>
     </table>
